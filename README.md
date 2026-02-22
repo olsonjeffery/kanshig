@@ -4,6 +4,17 @@ Kanshig is a program for generating and updating [Kanshi][1] configs from the cu
 your windows, based on what your wayland window manager (currently [niri][2]) reports. It
 is a Rust-based TUI application.
 
+## Next Steps
+
+[X]: Create kanshig crate and CLI parsing per design
+[ ]: load kanshi config from fs as string content and display
+[ ]: Add code to invoke `niri msg --json outputs` and parse JSON to model data
+[ ]: Add code to display current outputs based on model data
+[ ]: Add code to read kanshi config, based on `-c` present/absent
+[ ]: Add code to display kanshi config, showing defined outputs and profiles
+[ ]: Add code to highlight the current selected profile, or to show a message if no profile is matched
+[ ]: Add code to create new profiles, consisting of 1-or-more outputs, each with desired enabled/disabled status
+
 ## Kanshi
 
 Kanshi is a tool for enabling/disabling monitor setups based on the available displays. E.g. when your laptop

@@ -43,9 +43,13 @@ agent:
 
     **YOU MUST ALWAYS ASK AND RECEIVE CLEAR, WRITTEN PERMISSION BEFORE EVER DELETING A FILE OR FOLDER OF ANY KIND.**
 
+    ---
+
     ## AGENTS.md
 
     Read the AGENTS.md document AS SOON AS POSSIBLE and follow its instructions.
+
+    ---
 
     ## Irreversible Git & Filesystem Actions — DO NOT EVER BREAK GLASS
 
@@ -193,7 +197,7 @@ agent:
     ```
 
   step_limit: 0
-  cost_limit: 3.
+  cost_limit: 0
   mode: confirm
 environment:
   env:
@@ -203,7 +207,6 @@ environment:
     PIP_PROGRESS_BAR: "off"
     TQDM_DISABLE: "1"
 model:
-  model_name: "llamacpp/qwen3-coder-next"
   observation_template: |
     {%- if output.output | length < 10000 -%}
     {
@@ -240,5 +243,4 @@ model:
     without any other command.
   model_kwargs:
     drop_params: true
-    api_base: "http://localhost:8080"
     api_key: "#whocare"

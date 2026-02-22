@@ -1,5 +1,5 @@
 [package]
-name = "kanshig-cli"
+name = "kanshig"
 version = "0.1.0"
 edition = "2024"
 

@@ -1,5 +1,8 @@
+#![deny(warnings)]
+
 use clap::Parser;
 use std::path::Path;
+//use std::fs;
 
 /// kanshig - A TUI application for generating and updating Kanshi configs
 #[derive(Parser, Debug)]
@@ -19,7 +22,7 @@ fn main() {
 
     let args = Args::parse();
 
-    // Log the config path if provided
+    // Log the config path if provided-c agent.model.model_kwargs.api_base=${API_BASE}
     if let Some(config_path) = &args.config {
         log::info!("Loading kanshi config from: {}", config_path);
 
@@ -30,6 +33,7 @@ fn main() {
         } else {
             log::warn!("Config file not found: {}", config_path);
         }
+        //let config_file =
     } else {
         log::info!("No config path provided, using default kanshi config location");
     }

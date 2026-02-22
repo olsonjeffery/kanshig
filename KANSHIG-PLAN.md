@@ -1,13 +1,13 @@
-# Kansig Utility - Implementation Plan
+# kanshig Utility - Implementation Plan
 
 ## Overview
 
-Kansig is a Rust-based Text User Interface (TUI) application that generates and updates Kanshi configs from the current state of your windows, based on what your wayland window manager (niri) reports.
+kanshig is a Rust-based Text User Interface (TUI) application that generates and updates Kanshi configs from the current state of your windows, based on what your wayland window manager (niri) reports.
 
 ## Project Structure
 
 ```
-kansig/
+kanshig/
 ├── Cargo.toml              # Workspace configuration
 ├── src/
 │   ├── main.rs            # Application entry point
@@ -209,23 +209,14 @@ pub fn backup_existing_config() -> Result<(), StorageError> {
 ### Command Structure
 
 ```bash
-kansig [COMMAND]
-
-Commands:
-  generate  Generate Kanshi config from current outputs
-  preview   Preview generated config without saving
-  watch     Watch for display changes and auto-generate configs
-  help      Print this message or a specific command's help
+kanshig [-c ..]
 ```
 
 ### Options
 
 ```bash
-kansig generate
-  -o, --output <FILE>    Output file path (default: ~/.config/kanshi/config)
-  -p, --profile <NAME>   Profile name to use
-  -b, --backup           Create backup of existing config
-  --dry-run              Show what would be done without making changes
+kanshig
+  -c, --config <FILE>   Load the kanshi config from a custom location
 ```
 
 ## Error Handling (src/error.rs)
@@ -251,9 +242,11 @@ pub enum AppError {
 ```
 1. Initialize logger and configuration
 2. Parse command-line arguments
-3. Load existing Kanshi config (if any)
+3. Load existing Kanshi config file (if any)
+  3a. Check if `-c` flag passed to kanshig, if so load config from that exact path
+  3b. If no `-c` passed, look at ~/.config/kanshi/config
 4. Get current outputs from niri
-5. Display UI or execute command
+5. Display UI based on kanshig config
 6. Handle user input
 7. Generate/update Kanshi config
 8. Save config with backup if enabled
@@ -297,34 +290,40 @@ pub enum AppError {
 ## Implementation Steps
 
 ### Phase 1: Foundation
+
 1. Set up Cargo workspace structure
 2. Implement core data models
 3. Create error handling types
 4. Write unit tests for models
 
 ### Phase 2: Parsing
+
 1. Implement JSON parser for niri output
 2. Add validation logic
 3. Write parser tests with fixtures
 
 ### Phase 3: Storage
+
 1. Implement Kanshi config generation
 2. Add backup functionality
 3. Write storage tests
 
 ### Phase 4: UI
+
 1. Set up ratatui framework
 2. Implement main screen
 3. Add profile selection
 4. Create config preview screen
 
 ### Phase 5: CLI
+
 1. Implement command structure with clap
 2. Add generate command
 3. Add watch mode
 4. Add help documentation
 
 ### Phase 6: Testing
+
 1. Write integration tests
 2. Add regression tests
 3. Test edge cases
@@ -335,12 +334,12 @@ pub enum AppError {
 
 - Kanshi config: `~/.config/kanshi/config`
 - Backup directory: `~/.config/kanshi/backups/`
-- Cache directory: `~/.cache/kansig/`
+- Cache directory: `~/.cache/kanshig/`
 
 ### Configuration File (optional)
 
 ```toml
-# ~/.config/kansig/config.toml
+# ~/.config/kanshig/config.toml
 backup = true
 backup_dir = "~/.config/kanshi/backups"
 auto_generate = false
@@ -361,4 +360,3 @@ auto_generate = false
 - USAGE.md: Detailed usage instructions
 - ARCHITECTURE.md: Design decisions and system architecture
 - API.md: Public API documentation
-
