@@ -1,8 +1,10 @@
 #![deny(warnings)]
 
 use clap::Parser;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+
+mod validation;
 
 /// kanshig - A TUI application for generating and updating Kanshi configs
 #[derive(Parser, Debug)]
@@ -27,7 +29,10 @@ fn main() {
         path.clone()
     } else {
         // Default kanshi config location
-        format!("{}/.config/kanshi/config", std::env::var("HOME").unwrap_or_else(|_| String::from("/")))
+        format!(
+            "{}/.config/kanshi/config",
+            std::env::var("HOME").unwrap_or_else(|_| String::from("/"))
+        )
     };
 
     log::info!("Loading kanshi config from: {}", config_path);
@@ -36,11 +41,22 @@ fn main() {
     let path = Path::new(&config_path);
     if path.exists() {
         log::info!("Config file found at: {}", config_path);
-        
+
         // Load the file as a string
         match fs::read_to_string(&config_path) {
             Ok(content) => {
-                log::info!("Config file content:\n{}", content);
+                log::info!("Config file content loaded successfully");
+
+                // Validate the config
+                match validation::validate_config(&content) {
+                    Ok(_) => {
+                        log::info!("Config validation passed");
+                        log::info!("Config file content:\n{}", content);
+                    }
+                    Err(e) => {
+                        log::error!("Config validation failed: {}", e);
+                    }
+                }
             }
             Err(e) => {
                 log::error!("Failed to read config file: {}", e);

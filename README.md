@@ -7,13 +7,22 @@ is a Rust-based TUI application.
 ## Next Steps
 
 [X]: Create kanshig crate and CLI parsing per design
-[ ]: load kanshi config from fs as string content and display
+[X]: load kanshi config from fs as string content and display
 [ ]: Add code to invoke `niri msg --json outputs` and parse JSON to model data
 [ ]: Add code to display current outputs based on model data
 [ ]: Add code to read kanshi config, based on `-c` present/absent
 [ ]: Add code to display kanshi config, showing defined outputs and profiles
 [ ]: Add code to highlight the current selected profile, or to show a message if no profile is matched
 [ ]: Add code to create new profiles, consisting of 1-or-more outputs, each with desired enabled/disabled status
+
+## Helpful Notes
+
+1. The `kanshig-cli` crate IS the `kanshig` crate. That is the name of the binary the `kanshig-cli/Cargo.toml` definition builds. All work happens in the `kanshig-cli` crate
+2. The kanshi config file validation is implemented in the `validation` module. It validates:
+   - Matching braces (`{}` delimiters)
+   - Valid section types (`output` and `profile`)
+   - Valid parameters within each section type
+   - Proper formatting of section declarations
 
 ## Kanshi
 
@@ -120,19 +129,8 @@ This output can also be provided in JSON format:
 
 ```json
 $ niri msg --json outputs
-{"DP-8":{"name":"DP-8","make":"LG Electronics","model":"LG ULTRAGEAR","serial":"112NTBKD6701","physical_size":[700,390],"modes":[{"width":2560,"height":1440,"refresh_rate":119998,"is_preferred":true},{"width":3840,"height":216
-0,"refresh_rate":60000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":59940,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":50000,"is_preferred":false},{"width":3840,"height":2160,"refresh_ra
-te":30000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":29970,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":25000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":24000,"is
-_preferred":false},{"width":3840,"height":2160,"refresh_rate":23976,"is_preferred":false},{"width":2560,"height":1440,"refresh_rate":143933,"is_preferred":false},{"width":2560,"height":1440,"refresh_rate":59951,"is_preferred":
-false},{"width":1920,"height":1080,"refresh_rate":120000,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":119880,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"wi
-dth":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":59940,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":50000,"is_preferred":false},{"width":1280,"he
-ight":720,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":59940,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":50000,"is_preferred":false},{"width":1024,"height":768,"refre
-sh_rate":60004,"is_preferred":false},{"width":800,"height":600,"refresh_rate":60317,"is_preferred":false},{"width":720,"height":576,"refresh_rate":50000,"is_preferred":false},{"width":720,"height":480,"refresh_rate":60000,"is_
-preferred":false},{"width":720,"height":480,"refresh_rate":59940,"is_preferred":false},{"width":640,"height":480,"refresh_rate":60000,"is_preferred":false},{"width":640,"height":480,"refresh_rate":59940,"is_preferred":false}],
-"current_mode":0,"is_custom_mode":false,"vrr_supported":false,"vrr_enabled":false,"logical":{"x":0,"y":0,"width":2048,"height":1152,"scale":1.25,"transform":"Normal"}},"eDP-1":{"name":"eDP-1","make":"Lenovo Group Limited","mod
-el":"B140UAN02.7 ","serial":null,"physical_size":[300,190],"modes":[{"width":1920,"height":1200,"refresh_rate":60000,"is_preferred":true},{"width":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"width":1600,"he
-ight":1200,"refresh_rate":60000,"is_preferred":false},{"width":1680,"height":1050,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":1024,"refresh_rate":60000,"is_preferred":false},{"width":1440,"height":900,"re
-fresh_rate":60000,"is_preferred":false},{"width":1280,"height":800,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":60000,"is_preferred":false},{"width":1024,"height":768,"refresh_rate":6000
-0,"is_preferred":false},{"width":800,"height":600,"refresh_rate":60000,"is_preferred":false},{"width":640,"height":480,"refresh_rate":60000,"is_preferred":false}],"current_mode":null,"is_custom_mode":false,"vrr_supported":true
-,"vrr_enabled":false,"logical":null}
+{"DP-8":{"name":"DP-8","make":"LG Electronics","model":"LG ULTRAGEAR","serial":"112NTBKD6701","physical_size":[700,390],"modes":[{"width":2560,"height":1440,"refresh_rate":119998,"is_preferred":true},{"width":3840,"height":2160,"refresh_rate":60000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":59940,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":50000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":30000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":29970,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":25000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":24000,"is_preferred":false},{"width":3840,"height":2160,"refresh_rate":23976,"is_preferred":false},{"width":2560,"height":1440,"refresh_rate":143933,"is_preferred":false},{"width":2560,"height":1440,"refresh_rate":59951,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":120000,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":119880,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":59940,"is_preferred":false},{"width":1920,"height":1080,"refresh_rate":50000,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":59940,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":50000,"is_preferred":false},{"width":1024,"height":768,"refresh_rate":60004,"is_preferred":false},{"width":800,"height":600,"refresh_rate":60317,"is_preferred":false},{"width":720,"height":576,"refresh_rate":50000,"is_preferred":false},{"width":720,"height":480,"refresh_rate":60000,"is_preferred":false},{"width":720,"height":480,"refresh_rate":59940,"is_preferred":false},{"width":640,"height":480,"refresh_rate":60000,"is_preferred":false},{"width":640,"height":480,"refresh_rate":59940,"is_preferred":false}],"current_mode":0,"is_custom_mode":false,"vrr_supported":false,"vrr_enabled":false,"logical":{"x":0,"y":0,"width":2048,"height":1152,"scale":1.25,"transform":"Normal"}},"eDP-1":{"name":"eDP-1","make":"Lenovo Group Limited","model":"B140UAN02.7 ","serial":null,"physical_size":[300,190],"modes":[{"width":1920,"height":1200,"refresh_rate":60000,"is_preferred":true},{"width":1920,"height":1080,"refresh_rate":60000,"is_preferred":false},{"width":1600,"height":1200,"refresh_rate":60000,"is_preferred":false},{"width":1680,"height":1050,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":1024,"refresh_rate":60000,"is_preferred":false},{"width":1440,"height":900,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":800,"refresh_rate":60000,"is_preferred":false},{"width":1280,"height":720,"refresh_rate":60000,"is_preferred":false},{"width":1024,"height":768,"refresh_rate":60000,"is_preferred":false},{"width":800,"height":600,"refresh_rate":60000,"is_preferred":false},{"width":640,"height":480,"refresh_rate":60000,"is_preferred":false}],"current_mode":null,"is_custom_mode":false,"vrr_supported":true,"vrr_enabled":false,"logical":null}
 ```
+
+[1]: https://github.com/hyprlinux/kanshi
+[2]: https://niri.kirinyaga.org/
