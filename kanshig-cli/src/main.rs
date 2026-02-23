@@ -6,6 +6,7 @@ use std::fs;
 mod model;
 mod niri;
 mod parser;
+mod tui;
 mod validation;
 
 /// kanshig - A TUI application for generating and updating Kanshi configs
@@ -41,6 +42,8 @@ fn main() {
 
     // Check if the file exists and load it
     let path = std::path::Path::new(&config_path);
+    let mut config: Option<crate::model::KanshiConfig> = None;
+
     if path.exists() {
         log::info!("Config file found at: {}", config_path);
 
@@ -56,41 +59,9 @@ fn main() {
 
                         // Parse into data model structs
                         match parser::parse_config(&content) {
-                            Ok(config) => {
+                            Ok(parsed_config) => {
                                 log::info!("Config parsed into data model structs");
-
-                                // Display the parsed config
-                                log::info!("Parsed Kanshi Config:");
-                                log::info!("  Outputs: {}", config.outputs.len());
-                                for output in &config.outputs {
-                                    log::info!(
-                                        "    - {}: {} (scale: {}, position: {})",
-                                        output.name,
-                                        output.mode,
-                                        output.scale,
-                                        output.position
-                                    );
-                                    if let Some(alias) = &output.alias {
-                                        log::info!("      Alias: {}", alias);
-                                    }
-                                }
-
-                                log::info!("  Profiles: {}", config.profiles.len());
-                                for profile in &config.profiles {
-                                    log::info!(
-                                        "    - {}: {} outputs",
-                                        profile.name,
-                                        profile.outputs.len()
-                                    );
-                                    for output in &profile.outputs {
-                                        let status = if output.enabled {
-                                            "enabled"
-                                        } else {
-                                            "disabled"
-                                        };
-                                        log::info!("      - {} {}", output.alias, status);
-                                    }
-                                }
+                                config = Some(parsed_config);
                             }
                             Err(e) => {
                                 log::error!(
@@ -114,8 +85,7 @@ fn main() {
     }
 
     // Call niri msg --json outputs and display the results
-    log::info!("Calling niri msg --json outputs...");
-    match niri::get_niri_outputs() {
+    let niri_outputs = match niri::get_niri_outputs() {
         Ok(outputs) => {
             log::info!("Successfully retrieved {} niri outputs:", outputs.len());
             for (name, output) in outputs.iter() {
@@ -126,9 +96,54 @@ fn main() {
                     output.model.as_ref().unwrap_or(&String::new())
                 );
             }
+            Some(outputs)
         }
         Err(e) => {
             log::warn!("Failed to retrieve niri outputs: {}", e);
+            None
+        }
+    };
+
+    // Display the config and niri outputs using TUI
+    if let Some(c) = config {
+        log::info!("Parsed Kanshi Config:");
+        log::info!("  Outputs: {}", c.outputs.len());
+        for output in &c.outputs {
+            log::info!(
+                "    - {}: {} (scale: {}, position: {})",
+                output.name,
+                output.mode,
+                output.scale,
+                output.position
+            );
+            if let Some(alias) = &output.alias {
+                log::info!("      Alias: {}", alias);
+            }
+        }
+
+        log::info!("  Profiles: {}", c.profiles.len());
+        for profile in &c.profiles {
+            log::info!("    - {}: {} outputs", profile.name, profile.outputs.len());
+            for output in &profile.outputs {
+                let status = if output.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                };
+                log::info!("      - {} {}", output.alias, status);
+            }
+        }
+    }
+
+    if let Some(outputs) = niri_outputs {
+        log::info!("Niri Outputs: {} items", outputs.len());
+        for (name, output) in outputs.iter() {
+            log::info!(
+                "  - {}: {} {}",
+                name,
+                output.make.as_ref().unwrap_or(&String::new()),
+                output.model.as_ref().unwrap_or(&String::new())
+            );
         }
     }
 
