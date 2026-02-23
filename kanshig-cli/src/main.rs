@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use std::path::Path;
-//use std::fs;
+use std::fs;
 
 /// kanshig - A TUI application for generating and updating Kanshi configs
 #[derive(Parser, Debug)]
@@ -22,22 +22,33 @@ fn main() {
 
     let args = Args::parse();
 
-    // Log the config path if provided-c agent.model.model_kwargs.api_base=${API_BASE}
-    if let Some(config_path) = &args.config {
-        log::info!("Loading kanshi config from: {}", config_path);
-
-        // Check if the file exists
-        let path = Path::new(config_path);
-        if path.exists() {
-            log::info!("Config file found at: {}", config_path);
-        } else {
-            log::warn!("Config file not found: {}", config_path);
-        }
-        //let config_file =
+    // Determine the config path to load
+    let config_path = if let Some(path) = &args.config {
+        path.clone()
     } else {
-        log::info!("No config path provided, using default kanshi config location");
+        // Default kanshi config location
+        format!("{}/.config/kanshi/config", std::env::var("HOME").unwrap_or_else(|_| String::from("/")))
+    };
+
+    log::info!("Loading kanshi config from: {}", config_path);
+
+    // Check if the file exists and load it
+    let path = Path::new(&config_path);
+    if path.exists() {
+        log::info!("Config file found at: {}", config_path);
+        
+        // Load the file as a string
+        match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                log::info!("Config file content:\n{}", content);
+            }
+            Err(e) => {
+                log::error!("Failed to read config file: {}", e);
+            }
+        }
+    } else {
+        log::warn!("Config file not found: {}", config_path);
     }
 
-    // TODO: Implement the rest of the application
     log::info!("kanshig CLI initialized successfully");
 }

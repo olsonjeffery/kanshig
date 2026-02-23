@@ -197,7 +197,7 @@ agent:
     ```
 
   step_limit: 0
-  cost_limit: 0
+  cost_limit: 1
   mode: confirm
 environment:
   env:
@@ -207,6 +207,7 @@ environment:
     PIP_PROGRESS_BAR: "off"
     TQDM_DISABLE: "1"
 model:
+  model_name: "{{model.worker}}/qwen3-coder-next"
   observation_template: |
     {%- if output.output | length < 10000 -%}
     {
