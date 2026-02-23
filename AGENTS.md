@@ -239,5 +239,3 @@ git push                # Push to remote
 - Create new issues with `br create` when you discover tasks
 - Use descriptive titles and set appropriate priority/type
 - Always sync before ending session
-
-<!-- end-br-agent-instructions -->
