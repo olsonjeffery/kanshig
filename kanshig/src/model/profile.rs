@@ -10,7 +10,7 @@ pub struct OutputAssignment {
 }
 
 /// Represents a kanshi profile that groups outputs with enable/disable states
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Profile {
     pub name: String,
     pub outputs: Vec<OutputAssignment>,

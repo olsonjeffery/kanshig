@@ -8,10 +8,10 @@ is a Rust-based TUI application.
 
 [X]: Create kanshig crate and CLI parsing per design
 [X]: load kanshi config from fs as string content and display
-[ ]: Add code to invoke `niri msg --json outputs` and parse JSON to model data
-[ ]: Add code to display current outputs based on model data
-[ ]: Add code to read kanshi config, based on `-c` present/absent
-[ ]: Add code to display kanshi config, showing defined outputs and profiles
+[X]: Add code to invoke `niri msg --json outputs` and parse JSON to model data
+[X]: Add code to display current outputs based on model data
+[X]: Add code to read kanshi config, based on `-c` present/absent
+[X]: Add code to display kanshi config, showing defined outputs and profiles
 [ ]: Add code to highlight the current selected profile, or to show a message if no profile is matched
 [ ]: Add code to create new profiles, consisting of 1-or-more outputs, each with desired enabled/disabled status
 

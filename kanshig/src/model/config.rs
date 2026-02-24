@@ -6,7 +6,7 @@ use super::output::OutputDefinition;
 use super::profile::Profile;
 
 /// Represents the entire kanshi configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KanshiConfig {
     pub outputs: Vec<OutputDefinition>,
     pub profiles: Vec<Profile>,

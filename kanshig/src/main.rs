@@ -108,49 +108,6 @@ fn main() -> io::Result<()> {
         }
     };
 
-    // Display the config and niri outputs using TUI
-    if let Some(ref c) = config {
-        log::info!("Parsed Kanshi Config:");
-        log::info!("  Outputs: {}", c.outputs.len());
-        for output in &c.outputs {
-            log::info!(
-                "    - {}: {} (scale: {}, position: {})",
-                output.name,
-                output.mode,
-                output.scale,
-                output.position
-            );
-            if let Some(alias) = &output.alias {
-                log::info!("      Alias: {}", alias);
-            }
-        }
-
-        log::info!("  Profiles: {}", c.profiles.len());
-        for profile in &c.profiles {
-            log::info!("    - {}: {} outputs", profile.name, profile.outputs.len());
-            for output in &profile.outputs {
-                let status = if output.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                };
-                log::info!("      - {} {}", output.alias, status);
-            }
-        }
-    }
-
-    if let Some(ref outputs) = niri_outputs {
-        log::info!("Niri Outputs: {} items", outputs.len());
-        for (name, output) in outputs.iter() {
-            log::info!(
-                "  - {}: {} {}",
-                name,
-                output.make.as_ref().unwrap_or(&String::new()),
-                output.model.as_ref().unwrap_or(&String::new())
-            );
-        }
-    }
-
     log::info!("kanshig CLI initialized successfully");
 
     // Initialize TUI with mouse support
@@ -169,16 +126,38 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+pub enum KanshigTuiState {
+    OutputsFocused(usize, Option<usize>, (usize, Option<usize>)),
+    ProfilesFocused(usize, Option<usize>, (usize, Option<usize>)),
+}
+
+pub const MOVE_SET: &[event::KeyCode] = &[
+    event::KeyCode::Up,
+    event::KeyCode::Down,
+    event::KeyCode::Left,
+    event::KeyCode::Right,
+    event::KeyCode::Char('w'),
+    event::KeyCode::Char('a'),
+    event::KeyCode::Char('s'),
+    event::KeyCode::Char('d'),
+    event::KeyCode::Char('j'),
+    event::KeyCode::Char('k'),
+    event::KeyCode::Tab,
+];
+
+pub const WRITE_CONFIG: event::KeyCode = event::KeyCode::Char('W');
+
 fn run_tui(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stderr>>,
     config: Option<&crate::model::KanshiConfig>,
     niri_outputs: Option<&crate::model::NiriOutputs>,
 ) -> io::Result<()> {
+    let mut selected = KanshigTuiState::OutputsFocused(0, None, (0, None));
     // Create a loop to handle events
     loop {
         // Draw the UI
         terminal.draw(|frame| {
-            draw_ui(frame, config, niri_outputs);
+            draw_ui(frame, config, niri_outputs, &selected);
         })?;
 
         // Check for events
@@ -188,6 +167,67 @@ fn run_tui(
             // Exit on 'q' or Escape
             if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
                 break;
+            }
+            if MOVE_SET.contains(&key.code) {
+                // PW2S WORKER: update KanshigTuiState
+                // here based on keycode. Tab moves focus between
+                // Outputs & Profiles; Left/Right arrow keys & a/d chars are
+                // inert for now; j/k, up/down and w/s are wired to moving a selection
+                // up/down through a list; the list should wrap
+                selected = match selected {
+                    KanshigTuiState::OutputsFocused(oi, oo, (pi, po)) => {
+                        if let event::KeyCode::Tab = key.code {
+                            KanshigTuiState::ProfilesFocused(pi, po, (oi, oo))
+                        } else if let event::KeyCode::Up
+                        | event::KeyCode::Char('k')
+                        | event::KeyCode::Char('w') = key.code
+                        {
+                            // UP
+                            let new_val = pi.checked_sub(1).unwrap_or_default();
+                            KanshigTuiState::OutputsFocused(new_val, po, (pi, po))
+                        } else if let event::KeyCode::Down
+                        | event::KeyCode::Char('j')
+                        | event::KeyCode::Char('s') = key.code
+                        {
+                            //Down
+                            let new_val = pi.checked_add(1).unwrap_or_default();
+                            let new_val = if new_val >= config.unwrap().outputs.len() {
+                                config.unwrap().outputs.len() - 1
+                            } else {
+                                new_val
+                            };
+                            KanshigTuiState::OutputsFocused(new_val, oo, (pi, po))
+                        } else {
+                            selected
+                        }
+                    }
+                    KanshigTuiState::ProfilesFocused(pi, po, (oi, oo)) => {
+                        if let event::KeyCode::Tab = key.code {
+                            KanshigTuiState::OutputsFocused(oi, oo, (pi, po))
+                        } else if let event::KeyCode::Up
+                        | event::KeyCode::Char('k')
+                        | event::KeyCode::Char('w') = key.code
+                        {
+                            // UP
+                            let new_val = pi.checked_sub(1).unwrap_or_default();
+                            KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                        } else if let event::KeyCode::Down
+                        | event::KeyCode::Char('j')
+                        | event::KeyCode::Char('s') = key.code
+                        {
+                            //Down
+                            let new_val = pi.checked_add(1).unwrap_or_default();
+                            let new_val = if new_val >= config.unwrap().profiles.len() {
+                                config.unwrap().profiles.len() - 1
+                            } else {
+                                new_val
+                            };
+                            KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                        } else {
+                            selected
+                        }
+                    }
+                };
             }
         }
     }
@@ -199,41 +239,44 @@ fn draw_ui(
     frame: &mut ratatui::Frame,
     config: Option<&crate::model::KanshiConfig>,
     niri_outputs: Option<&crate::model::NiriOutputs>,
+    selected: &KanshigTuiState,
 ) {
     let area = frame.size();
 
-    // Split the area into two sections
+    // Split the area into sections
     let chunks = ratatui::layout::Layout::vertical([
         ratatui::layout::Constraint::Percentage(50),
         ratatui::layout::Constraint::Percentage(50),
     ])
     .split(area);
 
-    // Draw config if available
+    let outputs_chunk = chunks[0];
+    let profiles_chunk = chunks[1];
+
+    // Draw unified outputs if both config and niri_outputs are available
     if let Some(c) = config {
-        tui::display_config(frame, c);
+        if let Some(outputs) = niri_outputs {
+            tui::display_unified_outputs(frame, c, outputs, outputs_chunk, selected);
+        } else {
+            // Fallback to just config display
+            tui::display_config(frame, c, outputs_chunk);
+        }
+    } else if let Some(outputs) = niri_outputs {
+        // Fallback to just niri outputs display
+        tui::display_niri_outputs(frame, outputs, outputs_chunk);
     } else {
         frame.render_widget(
-            ratatui::widgets::Paragraph::new("No Kanshi config found").block(
+            ratatui::widgets::Paragraph::new("No Kanshi config or Niri outputs found").block(
                 ratatui::widgets::Block::new()
-                    .title("Kanshi Config")
+                    .title("Status")
                     .borders(ratatui::widgets::Borders::ALL),
             ),
-            chunks[0],
+            outputs_chunk,
         );
     }
 
-    // Draw niri outputs if available
-    if let Some(outputs) = niri_outputs {
-        tui::display_niri_outputs(frame, outputs);
-    } else {
-        frame.render_widget(
-            ratatui::widgets::Paragraph::new("No Niri outputs found").block(
-                ratatui::widgets::Block::new()
-                    .title("Niri Outputs")
-                    .borders(ratatui::widgets::Borders::ALL),
-            ),
-            chunks[1],
-        );
+    let has_profiles = config.is_some();
+    if has_profiles {
+        tui::display_profiles(frame, config, profiles_chunk);
     }
 }

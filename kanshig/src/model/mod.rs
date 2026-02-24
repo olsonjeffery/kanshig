@@ -8,4 +8,5 @@ pub mod profile;
 pub use config::KanshiConfig;
 pub use niri_output::NiriOutputs;
 pub use output::OutputDefinition;
+pub use output::UnifiedOutput;
 pub use profile::Profile;
