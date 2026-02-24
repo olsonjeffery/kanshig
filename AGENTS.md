@@ -239,3 +239,19 @@ git push                # Push to remote
 - Create new issues with `br create` when you discover tasks
 - Use descriptive titles and set appropriate priority/type
 - Always sync before ending session
+
+## CHANGES.md
+
+All changes to the kanshig codebase should be documented in `CHANGES.md`. When closing a bead (issue), add a new entry at the top of the file with:
+- Date
+- Issue ID and title
+- Brief description of what was implemented
+
+Format:
+```markdown
+## YYYY-MM-DD - bd-xxx: Issue Title
+
+- Description of changes made
+```
+
+New entries should always be added at the top of the file (newest first).
