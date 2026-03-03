@@ -1,11 +1,8 @@
-server-worker:
-	./qwen3-coder-next.sh
+server-qwen35:
+	./qwen35-27B.sh
 
-server-small-worker:
-	./devstral-small-2.sh
+agent-qwen35-8081:
+	MSWEA_COST_TRACKING=ignore_errors mini --yolo --cost-limit 0 -c mini-worker.yaml -c model.model_kwargs.api_base=http://localhost:8081
 
-agent-qwen3-8081:
-	MSWEA_COST_TRACKING=ignore_errors mini --yolo --cost-limit 0 -c qwen3-worker.yaml -c model.model_kwargs.api_base=http://localhost:8081
-
-agent-devstral2small-8082:
-	MSWEA_COST_TRACKING=ignore_errors mini -c devstral-small-1-worker.yaml --yolo --cost-limit 0 -c model.model_kwargs.api_base=http://localhost:8082
+agent-glm47flash-8081:
+	MSWEA_COST_TRACKING=ignore_errors mini --yolo --cost-limit 0 -c glm-4.7-flash-mini.yaml -c model.model_kwargs.api_base=http://localhost:8081

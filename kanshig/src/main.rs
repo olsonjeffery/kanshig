@@ -111,8 +111,7 @@ fn main() -> io::Result<()> {
     log::info!("kanshig CLI initialized successfully");
 
     // Initialize TUI with mouse support
-    let backend = CrosstermBackend::new(std::io::stderr());
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = ratatui::init();
 
     // Enable mouse support
     execute!(terminal.backend_mut(), event::EnableMouseCapture)?;
@@ -123,12 +122,16 @@ fn main() -> io::Result<()> {
     // Disable mouse support before exiting
     execute!(terminal.backend_mut(), event::DisableMouseCapture)?;
 
+    ratatui::restore();
+
     Ok(())
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum KanshigTuiState {
     OutputsFocused(usize, Option<usize>, (usize, Option<usize>)),
     ProfilesFocused(usize, Option<usize>, (usize, Option<usize>)),
+    QuitNow,
 }
 
 pub const MOVE_SET: &[event::KeyCode] = &[
@@ -148,7 +151,7 @@ pub const MOVE_SET: &[event::KeyCode] = &[
 pub const WRITE_CONFIG: event::KeyCode = event::KeyCode::Char('W');
 
 fn run_tui(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stderr>>,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     config: Option<&crate::model::KanshiConfig>,
     niri_outputs: Option<&crate::model::NiriOutputs>,
 ) -> io::Result<()> {
@@ -164,75 +167,91 @@ fn run_tui(
         if event::poll(std::time::Duration::from_millis(100))?
             && let event::Event::Key(key) = event::read()?
         {
-            // Exit on 'q' or Escape
-            if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
+            selected = update_input(config, &selected, key);
+            if let KanshigTuiState::QuitNow = selected {
                 break;
-            }
-            if MOVE_SET.contains(&key.code) {
-                // PW2S WORKER: update KanshigTuiState
-                // here based on keycode. Tab moves focus between
-                // Outputs & Profiles; Left/Right arrow keys & a/d chars are
-                // inert for now; j/k, up/down and w/s are wired to moving a selection
-                // up/down through a list; the list should wrap
-                selected = match selected {
-                    KanshigTuiState::OutputsFocused(oi, oo, (pi, po)) => {
-                        if let event::KeyCode::Tab = key.code {
-                            KanshigTuiState::ProfilesFocused(pi, po, (oi, oo))
-                        } else if let event::KeyCode::Up
-                        | event::KeyCode::Char('k')
-                        | event::KeyCode::Char('w') = key.code
-                        {
-                            // UP
-                            let new_val = pi.checked_sub(1).unwrap_or_default();
-                            KanshigTuiState::OutputsFocused(new_val, po, (pi, po))
-                        } else if let event::KeyCode::Down
-                        | event::KeyCode::Char('j')
-                        | event::KeyCode::Char('s') = key.code
-                        {
-                            //Down
-                            let new_val = pi.checked_add(1).unwrap_or_default();
-                            let new_val = if new_val >= config.unwrap().outputs.len() {
-                                config.unwrap().outputs.len() - 1
-                            } else {
-                                new_val
-                            };
-                            KanshigTuiState::OutputsFocused(new_val, oo, (pi, po))
-                        } else {
-                            selected
-                        }
-                    }
-                    KanshigTuiState::ProfilesFocused(pi, po, (oi, oo)) => {
-                        if let event::KeyCode::Tab = key.code {
-                            KanshigTuiState::OutputsFocused(oi, oo, (pi, po))
-                        } else if let event::KeyCode::Up
-                        | event::KeyCode::Char('k')
-                        | event::KeyCode::Char('w') = key.code
-                        {
-                            // UP
-                            let new_val = pi.checked_sub(1).unwrap_or_default();
-                            KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
-                        } else if let event::KeyCode::Down
-                        | event::KeyCode::Char('j')
-                        | event::KeyCode::Char('s') = key.code
-                        {
-                            //Down
-                            let new_val = pi.checked_add(1).unwrap_or_default();
-                            let new_val = if new_val >= config.unwrap().profiles.len() {
-                                config.unwrap().profiles.len() - 1
-                            } else {
-                                new_val
-                            };
-                            KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
-                        } else {
-                            selected
-                        }
-                    }
-                };
             }
         }
     }
 
     Ok(())
+}
+
+fn update_input(
+    config: Option<&model::KanshiConfig>,
+    in_selected: &KanshigTuiState,
+    key: event::KeyEvent,
+) -> KanshigTuiState {
+    let selected = *in_selected;
+    // Exit on 'q' or Escape
+    if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
+        return KanshigTuiState::QuitNow;
+    }
+    if MOVE_SET.contains(&key.code) {
+        // PW2S WORKER: update KanshigTuiState
+        // here based on keycode. Tab moves focus between
+        // Outputs & Profiles; Left/Right arrow keys & a/d chars are
+        // inert for now; j/k, up/down and w/s are wired to moving a selection
+        // up/down through a list; the list should wrap
+        match selected {
+            KanshigTuiState::QuitNow => return KanshigTuiState::QuitNow,
+            KanshigTuiState::OutputsFocused(oi, oo, (pi, po)) => {
+                if let event::KeyCode::Tab = key.code {
+                    KanshigTuiState::ProfilesFocused(pi, po, (oi, oo))
+                } else if let event::KeyCode::Up
+                | event::KeyCode::Char('k')
+                | event::KeyCode::Char('w') = key.code
+                {
+                    // UP
+                    let new_val = pi.checked_sub(1).unwrap_or_default();
+                    KanshigTuiState::OutputsFocused(new_val, po, (pi, po))
+                } else if let event::KeyCode::Down
+                | event::KeyCode::Char('j')
+                | event::KeyCode::Char('s') = key.code
+                {
+                    //Down
+                    let new_val = pi.checked_add(1).unwrap_or_default();
+                    let new_val = if new_val >= config.unwrap().outputs.len() {
+                        config.unwrap().outputs.len() - 1
+                    } else {
+                        new_val
+                    };
+                    KanshigTuiState::OutputsFocused(new_val, oo, (pi, po))
+                } else {
+                    selected
+                }
+            }
+            KanshigTuiState::ProfilesFocused(pi, po, (oi, oo)) => {
+                if let event::KeyCode::Tab = key.code {
+                    KanshigTuiState::OutputsFocused(oi, oo, (pi, po))
+                } else if let event::KeyCode::Up
+                | event::KeyCode::Char('k')
+                | event::KeyCode::Char('w') = key.code
+                {
+                    // UP
+                    let new_val = pi.checked_sub(1).unwrap_or_default();
+                    KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                } else if let event::KeyCode::Down
+                | event::KeyCode::Char('j')
+                | event::KeyCode::Char('s') = key.code
+                {
+                    //Down
+                    let new_val = pi.checked_add(1).unwrap_or_default();
+                    let new_val = if new_val >= config.unwrap().profiles.len() {
+                        config.unwrap().profiles.len() - 1
+                    } else {
+                        new_val
+                    };
+                    KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                } else {
+                    selected
+                }
+            }
+        }
+    } else {
+        selected
+    };
+    selected
 }
 
 fn draw_ui(
@@ -241,7 +260,7 @@ fn draw_ui(
     niri_outputs: Option<&crate::model::NiriOutputs>,
     selected: &KanshigTuiState,
 ) {
-    let area = frame.size();
+    let area = frame.area();
 
     // Split the area into sections
     let chunks = ratatui::layout::Layout::vertical([
