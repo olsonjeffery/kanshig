@@ -129,8 +129,8 @@ fn main() -> io::Result<()> {
 
 #[derive(Copy, Clone, Debug)]
 pub enum KanshigTuiState {
-    OutputsFocused(usize, Option<usize>, (usize, Option<usize>)),
-    ProfilesFocused(usize, Option<usize>, (usize, Option<usize>)),
+    OutputsFocused(i32, i32),
+    ProfilesFocused(i32, i32),
     QuitNow,
 }
 
@@ -155,7 +155,7 @@ fn run_tui(
     config: Option<&crate::model::KanshiConfig>,
     niri_outputs: Option<&crate::model::NiriOutputs>,
 ) -> io::Result<()> {
-    let mut selected = KanshigTuiState::OutputsFocused(0, None, (0, None));
+    let mut selected = KanshigTuiState::OutputsFocused(0, 0);
     // Create a loop to handle events
     loop {
         // Draw the UI
@@ -167,7 +167,7 @@ fn run_tui(
         if event::poll(std::time::Duration::from_millis(100))?
             && let event::Event::Key(key) = event::read()?
         {
-            selected = update_input(config, &selected, key);
+            selected = update_input(&selected, key);
             if let KanshigTuiState::QuitNow = selected {
                 break;
             }
@@ -177,72 +177,53 @@ fn run_tui(
     Ok(())
 }
 
-fn update_input(
-    config: Option<&model::KanshiConfig>,
-    in_selected: &KanshigTuiState,
-    key: event::KeyEvent,
-) -> KanshigTuiState {
+fn update_input(in_selected: &KanshigTuiState, key: event::KeyEvent) -> KanshigTuiState {
     let selected = *in_selected;
     // Exit on 'q' or Escape
     if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
         return KanshigTuiState::QuitNow;
     }
     if MOVE_SET.contains(&key.code) {
-        // PW2S WORKER: update KanshigTuiState
-        // here based on keycode. Tab moves focus between
-        // Outputs & Profiles; Left/Right arrow keys & a/d chars are
-        // inert for now; j/k, up/down and w/s are wired to moving a selection
-        // up/down through a list; the list should wrap
         match selected {
-            KanshigTuiState::QuitNow => return KanshigTuiState::QuitNow,
-            KanshigTuiState::OutputsFocused(oi, oo, (pi, po)) => {
+            KanshigTuiState::QuitNow => KanshigTuiState::QuitNow,
+            KanshigTuiState::OutputsFocused(oi, pi) => {
                 if let event::KeyCode::Tab = key.code {
-                    KanshigTuiState::ProfilesFocused(pi, po, (oi, oo))
+                    KanshigTuiState::ProfilesFocused(pi, oi)
                 } else if let event::KeyCode::Up
                 | event::KeyCode::Char('k')
                 | event::KeyCode::Char('w') = key.code
                 {
                     // UP
-                    let new_val = pi.checked_sub(1).unwrap_or_default();
-                    KanshigTuiState::OutputsFocused(new_val, po, (pi, po))
+                    let new_val = oi - 1;
+                    KanshigTuiState::OutputsFocused(new_val, pi)
                 } else if let event::KeyCode::Down
                 | event::KeyCode::Char('j')
                 | event::KeyCode::Char('s') = key.code
                 {
                     //Down
-                    let new_val = pi.checked_add(1).unwrap_or_default();
-                    let new_val = if new_val >= config.unwrap().outputs.len() {
-                        config.unwrap().outputs.len() - 1
-                    } else {
-                        new_val
-                    };
-                    KanshigTuiState::OutputsFocused(new_val, oo, (pi, po))
+                    let new_val = oi + 1;
+                    KanshigTuiState::OutputsFocused(new_val, pi)
                 } else {
                     selected
                 }
             }
-            KanshigTuiState::ProfilesFocused(pi, po, (oi, oo)) => {
+            KanshigTuiState::ProfilesFocused(oi, pi) => {
                 if let event::KeyCode::Tab = key.code {
-                    KanshigTuiState::OutputsFocused(oi, oo, (pi, po))
+                    KanshigTuiState::OutputsFocused(pi, oi)
                 } else if let event::KeyCode::Up
                 | event::KeyCode::Char('k')
                 | event::KeyCode::Char('w') = key.code
                 {
                     // UP
-                    let new_val = pi.checked_sub(1).unwrap_or_default();
-                    KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                    let new_val = oi - 1;
+                    KanshigTuiState::ProfilesFocused(new_val, pi)
                 } else if let event::KeyCode::Down
                 | event::KeyCode::Char('j')
                 | event::KeyCode::Char('s') = key.code
                 {
                     //Down
-                    let new_val = pi.checked_add(1).unwrap_or_default();
-                    let new_val = if new_val >= config.unwrap().profiles.len() {
-                        config.unwrap().profiles.len() - 1
-                    } else {
-                        new_val
-                    };
-                    KanshigTuiState::ProfilesFocused(new_val, po, (oi, oo))
+                    let new_val = oi + 1;
+                    KanshigTuiState::ProfilesFocused(new_val, pi)
                 } else {
                     selected
                 }
@@ -250,8 +231,7 @@ fn update_input(
         }
     } else {
         selected
-    };
-    selected
+    }
 }
 
 fn draw_ui(
@@ -296,6 +276,6 @@ fn draw_ui(
 
     let has_profiles = config.is_some();
     if has_profiles {
-        tui::display_profiles(frame, config, profiles_chunk);
+        tui::display_profiles(frame, config, profiles_chunk, selected);
     }
 }

@@ -65,22 +65,40 @@ pub fn display_profiles(
     f: &mut Frame,
     config: Option<&model::KanshiConfig>,
     profiles_chunk: ratatui::prelude::Rect,
+    selected: &KanshigTuiState,
 ) {
     let config = match config {
         Some(t) => t.clone(),
         None => KanshiConfig::default(),
     };
-    let profiles_list: Vec<ListItem> = config
-        .profiles
-        .iter()
-        .map(|profile| {
-            let output_count = profile.outputs.len();
-            ListItem::new(format!("{} ({} outputs)", profile.name, output_count))
-        })
-        .collect();
+    let mut profiles_list = Vec::new();
+    let list_len = config.profiles.len();
+    for (idx, profile) in config.profiles.iter().enumerate() {
+        let is_selected = match selected {
+            KanshigTuiState::ProfilesFocused(pi, _) => modulo_match(*pi, idx as i32, list_len),
+            _ => false,
+        };
+        let style = if is_selected {
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Black)
+                .bg(Color::White)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let output_count = profile.outputs.len();
+        let ret_val =
+            ListItem::new(format!("{} ({} outputs)", profile.name, output_count)).style(style);
+        profiles_list.push(ret_val);
+    }
+    let box_style = if let KanshigTuiState::ProfilesFocused(_, _) = selected {
+        Style::default().fg(Color::White).bold()
+    } else {
+        Style::default().fg(Color::Magenta)
+    };
     let profiles_list_widget = List::new(profiles_list)
         .block(Block::new().title("Profiles").borders(Borders::ALL))
-        .style(Style::default().fg(Color::Cyan));
+        .style(box_style);
     f.render_widget(profiles_list_widget, profiles_chunk);
 }
 
@@ -152,9 +170,10 @@ pub fn display_unified_outputs(
     }
 
     // Now create the list items with labels
+    let list_len = unified_outputs.len();
     for (idx, unified) in unified_outputs.iter().enumerate() {
         let is_selected = match selected {
-            KanshigTuiState::OutputsFocused(oi, _, _) => *oi == idx,
+            KanshigTuiState::OutputsFocused(oi, _) => modulo_match(*oi, idx as i32, list_len),
             _ => false,
         };
         let mut labels = Vec::new();
@@ -186,7 +205,10 @@ pub fn display_unified_outputs(
             Style::default()
         };
         let style = if is_selected {
-            style.add_modifier(Modifier::BOLD)
+            style
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Black)
+                .bg(Color::White)
         } else {
             style
         };
@@ -194,17 +216,57 @@ pub fn display_unified_outputs(
         outputs_list.push(ListItem::new(text).style(style));
     }
 
+    let box_style = if let KanshigTuiState::OutputsFocused(_, _) = selected {
+        Style::default().fg(Color::White).bold()
+    } else {
+        Style::default().fg(Color::Green)
+    };
     let outputs_list_widget = List::new(outputs_list)
         .block(Block::new().title("Outputs").borders(Borders::ALL))
-        .style(Style::default().fg(Color::White));
-    //let outputs_list_widget = outputs_list_widgetl
+        .style(box_style);
 
     f.render_widget(outputs_list_widget, area);
+}
+
+fn modulo_match(selected_idx: i32, list_item_idx: i32, list_len: usize) -> bool {
+    if selected_idx == 0 {
+        return selected_idx == list_item_idx;
+    }
+    if selected_idx == -1 {
+        return list_item_idx == (list_len - 1) as i32;
+    }
+    let item = if selected_idx < 0 {
+        let offset = ((-selected_idx) + list_len as i32) % list_len as i32;
+        -(selected_idx - offset)
+    } else {
+        selected_idx
+    };
+    if list_item_idx > (list_len as i32) {
+        // malformed input; fail
+        return false;
+    }
+    item % (list_len as i32) == list_item_idx
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modulo_stuff() {
+        assert!(modulo_match(0, 0, 3));
+        assert!(modulo_match(1, 1, 3));
+        assert!(modulo_match(2, 2, 3));
+        assert!(modulo_match(3, 0, 3));
+        assert!(modulo_match(4, 1, 3));
+        assert!(modulo_match(8, 2, 3));
+        assert!(!modulo_match(3, 2, 3));
+        assert!(!modulo_match(2, 3, 4));
+        assert!(modulo_match(-1, 2, 3));
+        assert!(modulo_match(-2, 1, 3));
+        assert!(modulo_match(-3, 0, 3));
+        assert!(modulo_match(-4, 2, 3));
+    }
 
     #[test]
     fn test_display_config() {

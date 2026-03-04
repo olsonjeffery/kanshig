@@ -17,8 +17,7 @@ is a Rust-based TUI application.
 
 ## Helpful Notes
 
-1. The `kanshig-cli` crate IS the `kanshig` crate. That is the name of the binary the `kanshig-cli/Cargo.toml` definition builds. All work happens in the `kanshig-cli` crate
-2. The kanshi config file validation is implemented in the `validation` module. It validates:
+1. The kanshi config file validation is implemented in the `validation` module. It validates:
    - Matching braces (`{}` delimiters)
    - Valid section types (`output` and `profile`)
    - Valid parameters within each section type
