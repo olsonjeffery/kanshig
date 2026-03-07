@@ -64,6 +64,7 @@ pub fn display_niri_outputs(f: &mut Frame, outputs: &NiriOutputs, display_chunk:
 pub fn display_profiles(
     f: &mut Frame,
     config: Option<&model::KanshiConfig>,
+    niri_outputs: Option<&NiriOutputs>,
     profiles_chunk: ratatui::prelude::Rect,
     selected: &KanshigTuiState,
 ) {
@@ -71,6 +72,16 @@ pub fn display_profiles(
         Some(t) => t.clone(),
         None => KanshiConfig::default(),
     };
+
+    // Split the profiles area horizontally into list (left) and details (right)
+    let profile_chunks =
+        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .split(profiles_chunk);
+
+    let profiles_list_area = profile_chunks[0];
+    let profiles_details_area = profile_chunks[1];
+
+    // Build the profiles list (left side)
     let mut profiles_list = Vec::new();
     let list_len = config.profiles.len();
     for (idx, profile) in config.profiles.iter().enumerate() {
@@ -99,7 +110,88 @@ pub fn display_profiles(
     let profiles_list_widget = List::new(profiles_list)
         .block(Block::new().title("Profiles").borders(Borders::ALL))
         .style(box_style);
-    f.render_widget(profiles_list_widget, profiles_chunk);
+    f.render_widget(profiles_list_widget, profiles_list_area);
+
+    // Build the profile details (right side)
+    let details_text = match selected {
+        KanshigTuiState::ProfilesFocused(pi, _) => {
+            if list_len > 0 {
+                let selected_idx = normalize_index(*pi, list_len);
+                if selected_idx < config.profiles.len() {
+                    let profile = &config.profiles[selected_idx];
+                    build_profile_details(profile, niri_outputs)
+                } else {
+                    "No profile selected".to_string()
+                }
+            } else {
+                "No profiles available".to_string()
+            }
+        }
+        _ => "Select a profile to view details".to_string(),
+    };
+
+    let details_widget = ratatui::widgets::Paragraph::new(details_text)
+        .block(Block::new().title("Profile Details").borders(Borders::ALL))
+        .style(Style::default().fg(Color::White));
+    f.render_widget(details_widget, profiles_details_area);
+}
+
+/// Normalize a potentially negative or out-of-bounds index to a valid index
+fn normalize_index(idx: i32, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    let len_i32 = len as i32;
+    let normalized = ((idx % len_i32) + len_i32) % len_i32;
+    normalized as usize
+}
+
+/// Build the details text for a profile
+fn build_profile_details(profile: &model::Profile, niri_outputs: Option<&NiriOutputs>) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!("Profile: {}", profile.name));
+    lines.push("".to_string());
+    lines.push("Outputs:".to_string());
+
+    for assignment in &profile.outputs {
+        let status = if assignment.enabled {
+            "enable"
+        } else {
+            "disable"
+        };
+        let mut detail_line = format!("  - {}: {}", assignment.alias, status);
+
+        // Check if this output is detected in niri outputs
+        if let Some(niri) = niri_outputs
+            && is_output_detected(assignment.alias.as_str(), niri)
+        {
+            detail_line.push_str(" [DETECTED]");
+        }
+        lines.push(detail_line);
+    }
+
+    lines.join("\n")
+}
+
+/// Check if an output alias corresponds to a detected niri output
+fn is_output_detected(alias: &str, niri_outputs: &NiriOutputs) -> bool {
+    // Extract the display name from the alias (e.g., $HOME_0 -> HOME_0)
+    let alias_name = alias.trim_start_matches('$');
+
+    for (_, niri_output) in niri_outputs.iter() {
+        let model = niri_output.model.as_deref().unwrap_or("");
+        let name = niri_output.name.as_str();
+
+        // Check if the alias matches the model or name
+        if alias_name == model || alias_name == name {
+            return true;
+        }
+        // Also check if the model/name contains the alias
+        if model.contains(alias_name) || name.contains(alias_name) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Display the unified outputs (combined config and niri outputs)

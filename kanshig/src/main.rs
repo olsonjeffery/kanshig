@@ -301,7 +301,7 @@ fn draw_ui(
 
     let has_profiles = config.is_some();
     if has_profiles {
-        tui::display_profiles(frame, config, profiles_chunk, selected);
+        tui::display_profiles(frame, config, niri_outputs, profiles_chunk, selected);
     }
 }
 
