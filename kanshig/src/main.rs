@@ -5,7 +5,7 @@ use std::fs;
 use std::io;
 
 use ratatui::crossterm::{event, execute};
-use ratatui::{Terminal, prelude::CrosstermBackend};
+use ratatui::{Terminal, layout::Rect, prelude::CrosstermBackend};
 
 mod model;
 mod niri;
@@ -131,6 +131,7 @@ fn main() -> io::Result<()> {
 pub enum KanshigTuiState {
     OutputsFocused(i32, i32),
     ProfilesFocused(i32, i32),
+    HelpPopup,
     QuitNow,
 }
 
@@ -179,6 +180,23 @@ fn run_tui(
 
 fn update_input(in_selected: &KanshigTuiState, key: event::KeyEvent) -> KanshigTuiState {
     let selected = *in_selected;
+
+    // Handle help popup toggle with '?'
+    if key.code == event::KeyCode::Char('?') {
+        return match selected {
+            KanshigTuiState::OutputsFocused(_, _) | KanshigTuiState::ProfilesFocused(_, _) => {
+                KanshigTuiState::HelpPopup
+            }
+            KanshigTuiState::HelpPopup => KanshigTuiState::OutputsFocused(0, 0),
+            _ => selected,
+        };
+    }
+
+    // When help popup is open, any key closes it
+    if let KanshigTuiState::HelpPopup = selected {
+        return KanshigTuiState::OutputsFocused(0, 0);
+    }
+
     // Exit on 'q' or Escape
     if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
         return KanshigTuiState::QuitNow;
@@ -228,6 +246,7 @@ fn update_input(in_selected: &KanshigTuiState, key: event::KeyEvent) -> KanshigT
                     selected
                 }
             }
+            KanshigTuiState::HelpPopup => selected,
         }
     } else {
         selected
@@ -241,6 +260,12 @@ fn draw_ui(
     selected: &KanshigTuiState,
 ) {
     let area = frame.area();
+
+    // Draw help popup if active
+    if let KanshigTuiState::HelpPopup = selected {
+        draw_help_popup(frame, area);
+        return;
+    }
 
     // Split the area into sections
     let chunks = ratatui::layout::Layout::vertical([
@@ -278,4 +303,67 @@ fn draw_ui(
     if has_profiles {
         tui::display_profiles(frame, config, profiles_chunk, selected);
     }
+}
+
+/// Represents a help entry with keys and description
+#[derive(Debug, Clone)]
+struct HelpEntry {
+    keys: Vec<&'static str>,
+    description: &'static str,
+}
+
+/// Draw the help popup centered on screen
+fn draw_help_popup(frame: &mut ratatui::Frame, area: Rect) {
+    // Define help entries - easily extensible for future additions
+    let help_entries = vec![
+        HelpEntry {
+            keys: vec!["j", "s", "↓"],
+            description: "Move down",
+        },
+        HelpEntry {
+            keys: vec!["k", "w", "↑"],
+            description: "Move up",
+        },
+        HelpEntry {
+            keys: vec!["Tab"],
+            description: "Switch focus between panels",
+        },
+        HelpEntry {
+            keys: vec!["q", "Esc"],
+            description: "Quit",
+        },
+        HelpEntry {
+            keys: vec!["?"],
+            description: "Toggle help popup",
+        },
+    ];
+
+    // Calculate popup dimensions
+    let popup_width = 50;
+    let popup_height = help_entries.len() + 4; // Title + entries + footer + padding
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height as u16)) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height as u16);
+
+    // Create the popup block
+    let popup_block = ratatui::widgets::Block::new()
+        .title(" Help (press any key to close) ")
+        .borders(ratatui::widgets::Borders::ALL)
+        .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow));
+
+    // Build the help content
+    let mut lines: Vec<ratatui::text::Line> = Vec::new();
+    for entry in help_entries {
+        let keys_text: String = entry.keys.join(", ");
+        let line = format!("{:<15} {}", keys_text, entry.description);
+        lines.push(ratatui::text::Line::raw(line));
+    }
+
+    let help_text = ratatui::text::Text::from(lines);
+    let help_paragraph = ratatui::widgets::Paragraph::new(help_text)
+        .block(popup_block)
+        .style(ratatui::style::Style::default().fg(ratatui::style::Color::White));
+
+    // Render the popup
+    frame.render_widget(help_paragraph, popup_area);
 }

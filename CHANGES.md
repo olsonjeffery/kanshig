@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-03-07 - bd-1dm: Add popup help screen tied to ?
+
+- Added `?` keybinding to toggle help popup
+- Help popup displays all keyboard shortcuts grouped by function
+- Any key press closes the popup and returns to outputs view
+- Designed with extensible `HelpEntry` struct for easy future additions
+- Popup renders centered on screen with yellow border
+
+## 2026-03-07 - bd-3mi: Fix TUI focus/toggle behavior
+
+- Fix LLM jank on input handling
+- Fix LLM jank on highlighting/focus/tab paradigm in the TUI
+- Please take note of how input works and behaves, do not break with future changes
+
 ## 2026-02-24 - bd-2kj: Add TUI Frame, mouse support
 
 - Implemented TUI application using ratatui with mouse support
