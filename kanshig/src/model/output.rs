@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::niri_output::NiriOutput;
+
 /// Represents a display output definition in the kanshi config
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OutputDefinition {
@@ -26,6 +28,9 @@ pub struct UnifiedOutput {
     pub detected: bool,
     /// Whether this output is configured in kanshi config
     pub configured: bool,
+    /// Associated niri output data (if detected)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub niri_output: Option<NiriOutput>,
 }
 
 impl UnifiedOutput {
@@ -39,6 +44,7 @@ impl UnifiedOutput {
             alias: output.alias,
             detected: false,
             configured: true,
+            niri_output: None,
         }
     }
 

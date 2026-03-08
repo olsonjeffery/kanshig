@@ -3,6 +3,7 @@
 use clap::Parser;
 use std::fs;
 use std::io;
+use std::process::Command;
 
 use ratatui::crossterm::{event, execute};
 use ratatui::{Terminal, layout::Rect, prelude::CrosstermBackend};
@@ -23,6 +24,14 @@ struct Args {
     /// Load the kanshi config from a custom location
     #[arg(short, long)]
     config: Option<String>,
+
+    /// Output unified outputs as JSON and exit (skip TUI)
+    #[arg(long)]
+    json: bool,
+
+    /// Reload kanshi config by restarting the kanshi systemd daemon
+    #[arg(long)]
+    reload: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -110,6 +119,20 @@ fn main() -> io::Result<()> {
 
     log::info!("kanshig CLI initialized successfully");
 
+    // Handle reload mode (restart kanshi systemd daemon)
+    if args.reload {
+        reload_kanshi_daemon()?;
+        return Ok(());
+    }
+
+    // Handle JSON output mode (skip TUI)
+    if args.json {
+        let unified_outputs = build_unified_outputs(config.as_ref(), niri_outputs.as_ref());
+        let json_output = serde_json::to_string_pretty(&unified_outputs)?;
+        println!("{}", json_output);
+        return Ok(());
+    }
+
     // Initialize TUI with mouse support
     let mut terminal = ratatui::init();
 
@@ -123,6 +146,100 @@ fn main() -> io::Result<()> {
     execute!(terminal.backend_mut(), event::DisableMouseCapture)?;
 
     ratatui::restore();
+
+    Ok(())
+}
+
+/// Build a list of unified outputs from config and niri outputs
+fn build_unified_outputs(
+    config: Option<&crate::model::KanshiConfig>,
+    niri_outputs: Option<&crate::model::NiriOutputs>,
+) -> Vec<crate::model::UnifiedOutput> {
+    let mut unified_outputs: Vec<crate::model::UnifiedOutput> = Vec::new();
+
+    // Start with config outputs if available
+    if let Some(cfg) = config {
+        for output in &cfg.outputs {
+            unified_outputs.push(crate::model::UnifiedOutput::from_config(output.clone()));
+        }
+    }
+
+    // Mark outputs as detected and add detected-only outputs
+    if let Some(niri) = niri_outputs {
+        for niri_output in niri.values() {
+            let mut match_found = false;
+            let ni_model = niri_output.model.as_deref().unwrap_or("");
+
+            // Try to match with existing configured outputs
+            for unified in &mut unified_outputs {
+                if unified.name.contains(ni_model) {
+                    unified.mark_detected();
+                    match_found = true;
+                    break;
+                }
+            }
+
+            // If no match found, add as detected-only output
+            if !match_found {
+                let mode = if !niri_output.modes.is_empty() {
+                    let preferred_mode = niri_output
+                        .modes
+                        .iter()
+                        .find(|m| m.is_preferred)
+                        .unwrap_or(&niri_output.modes[0]);
+                    format!(
+                        "{}x{}@{:.3}",
+                        preferred_mode.width,
+                        preferred_mode.height,
+                        preferred_mode.refresh_rate as f64 / 1000.0
+                    )
+                } else {
+                    String::new()
+                };
+
+                unified_outputs.push(crate::model::UnifiedOutput {
+                    name: format!("display: {} (model {})", niri_output.name, ni_model),
+                    mode,
+                    position: String::new(),
+                    scale: 1.0,
+                    alias: None,
+                    detected: true,
+                    configured: false,
+                    niri_output: Some(niri_output.clone()),
+                });
+            }
+        }
+    }
+
+    unified_outputs
+}
+
+/// Reload kanshi by restarting the systemd daemon
+/// Idempotent and safe to reinvoke
+fn reload_kanshi_daemon() -> io::Result<()> {
+    log::info!("Restarting kanshi systemd daemon...");
+
+    let output = Command::new("systemctl")
+        .args(["restart", "kanshi"])
+        .output()?;
+
+    if output.status.success() {
+        println!("Kanshi daemon restarted successfully");
+        log::info!("Kanshi daemon restarted successfully");
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        log::error!("Failed to restart kanshi daemon");
+        log::error!("stdout: {}", stdout);
+        log::error!("stderr: {}", stderr);
+        let error_msg = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        println!("Failed to restart kanshi daemon: {}", error_msg);
+        return Err(io::Error::other("Failed to restart kanshi daemon"));
+    }
 
     Ok(())
 }

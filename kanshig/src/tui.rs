@@ -237,6 +237,7 @@ pub fn display_unified_outputs(
             if config_name.contains(&ni_model) {
                 let config_item = unified_outputs.get_mut(idx).unwrap();
                 config_item.mark_detected();
+                config_item.niri_output = Some(niri_item.1.clone());
                 match_found = true;
             }
         }
@@ -264,6 +265,7 @@ pub fn display_unified_outputs(
                 } else {
                     "".to_owned()
                 },
+                niri_output: Some(niri_item.1.clone()),
             })
         }
     }
@@ -291,7 +293,13 @@ pub fn display_unified_outputs(
             format!(" [{}] ", labels.join(", "))
         };
 
-        let text = format!("{}{}", labels_text, unified.name);
+        // Add alias at the front if present
+        let alias_prefix = if let Some(alias) = &unified.alias {
+            format!("{} ", alias)
+        } else {
+            String::new()
+        };
+        let text = format!("{}{}{}", alias_prefix, labels_text, unified.name);
 
         // Choose color based on flags
         let style = if unified.is_detected() && unified.is_configured() {
@@ -383,6 +391,56 @@ fn build_output_details(output: &UnifiedOutput) -> String {
     // Alias (if present)
     if let Some(alias) = &output.alias {
         lines.push(format!("Alias: {}", alias));
+    }
+
+    // Niri output details (if available)
+    if let Some(niri) = &output.niri_output {
+        lines.push("".to_string());
+        lines.push("Niri Details:".to_string());
+
+        // Make and model
+        if let Some(make) = &niri.make {
+            lines.push(format!("  Make: {}", make));
+        }
+        if let Some(model) = &niri.model {
+            lines.push(format!("  Model: {}", model));
+        }
+        if let Some(serial) = &niri.serial {
+            lines.push(format!("  Serial: {}", serial));
+        }
+
+        // Physical size
+        if let Some(size) = &niri.physical_size {
+            lines.push(format!("  Physical Size: {}x{} mm", size[0], size[1]));
+        }
+
+        // Logical properties
+        if let Some(logical) = &niri.logical {
+            lines.push(format!(
+                "  Logical: {}x{}@{} scale={}",
+                logical.x, logical.y, logical.transform, logical.scale
+            ));
+        }
+
+        // VRR info
+        lines.push(format!("  VRR Supported: {}", niri.vrr_supported));
+        lines.push(format!("  VRR Enabled: {}", niri.vrr_enabled));
+
+        // Modes list
+        lines.push("".to_string());
+        lines.push("  Available Modes:".to_string());
+        for mode in &niri.modes {
+            let refresh_hz = mode.refresh_rate as f64 / 1000.0;
+            let preferred = if mode.is_preferred {
+                " (PREFERRED)"
+            } else {
+                ""
+            };
+            lines.push(format!(
+                "    - {}x{}@{:.1} Hz{}",
+                mode.width, mode.height, refresh_hz, preferred
+            ));
+        }
     }
 
     lines.join("\n")
