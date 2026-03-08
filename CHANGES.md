@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-03-08 - bd-14b: Show unified output details
+
+- Implemented split view for unified outputs panel: left side (40%) shows outputs list with CONFIGURED/DETECTED labels and highlighting
+- Right side (60%) displays details of selected output including status, name, mode, position, scale, and alias
+- Added `build_output_details()` helper function to format output information
+- Truncates cleanly if output details overflow the box, otherwise spaces them out evenly
+
+## 2026-03-08 - bd-1hq: Show profile details
+
+- Implemented split view for profiles panel: left side (40%) shows profile list, right side (60%) shows details
+- Details display profile name, each output's alias with enable/disable status
+- Shows [DETECTED] marker when an output in the profile matches an active niri display
+
+## 2026-02-27 - bd-da8: Combine Outputs and Niri Outputs screen
+
+- Merged Outputs and Niri Outputs panels into unified Outputs list
+- Each entry can have CONFIGURED and/or DETECTED labels in different bright colors
+- CONFIGURED label appears when output entry exists in kanshi config
+- DETECTED label appears when output entry appears in niri outputs data
+- Duplicates by output name merge into single entry with both flags
+
 ## 2027-03-07 - bd-1dm: Add popup help screen tied to ?
 
 - Added `?` keybinding to toggle help popup
