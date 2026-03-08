@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-03-07 - bd-1dm: Add popup help screen tied to ?
+## 2027-03-07 - bd-1dm: Add popup help screen tied to ?
 
 - Added `?` keybinding to toggle help popup
 - Help popup displays all keyboard shortcuts grouped by function

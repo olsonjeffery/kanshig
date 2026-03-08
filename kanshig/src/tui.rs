@@ -204,6 +204,13 @@ pub fn display_unified_outputs(
 ) {
     let area = display_chunk;
 
+    // Split the area horizontally into list (left) and details (right)
+    let output_chunks =
+        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(area);
+
+    let outputs_list_area = output_chunks[0];
+    let outputs_details_area = output_chunks[1];
+
     // Create a list of unified outputs
     let mut outputs_list: Vec<ListItem> = Vec::new();
 
@@ -317,7 +324,68 @@ pub fn display_unified_outputs(
         .block(Block::new().title("Outputs").borders(Borders::ALL))
         .style(box_style);
 
-    f.render_widget(outputs_list_widget, area);
+    f.render_widget(outputs_list_widget, outputs_list_area);
+
+    // Build the output details (right side)
+    let details_text = match selected {
+        KanshigTuiState::OutputsFocused(oi, _) => {
+            if list_len > 0 {
+                let selected_idx = normalize_index(*oi, list_len);
+                if selected_idx < unified_outputs.len() {
+                    build_output_details(&unified_outputs[selected_idx])
+                } else {
+                    "No output selected".to_string()
+                }
+            } else {
+                "No outputs available".to_string()
+            }
+        }
+        _ => "Select an output to view details".to_string(),
+    };
+
+    let details_widget = ratatui::widgets::Paragraph::new(details_text)
+        .block(Block::new().title("Output Details").borders(Borders::ALL))
+        .style(Style::default().fg(Color::White));
+    f.render_widget(details_widget, outputs_details_area);
+}
+
+/// Build the details text for a unified output
+fn build_output_details(output: &UnifiedOutput) -> String {
+    let mut lines = Vec::new();
+
+    // Status line
+    let mut status_parts = Vec::new();
+    if output.is_configured() {
+        status_parts.push("CONFIGURED");
+    }
+    if output.is_detected() {
+        status_parts.push("DETECTED");
+    }
+    lines.push(format!("Status: {}", status_parts.join(", ")));
+    lines.push("".to_string());
+
+    // Name
+    lines.push(format!("Name: {}", output.name));
+
+    // Mode
+    if !output.mode.is_empty() {
+        lines.push(format!("Mode: {}", output.mode));
+    }
+
+    // Position
+    if !output.position.is_empty() {
+        lines.push(format!("Position: {}", output.position));
+    }
+
+    // Scale
+    lines.push(format!("Scale: {}", output.scale));
+
+    // Alias (if present)
+    if let Some(alias) = &output.alias {
+        lines.push(format!("Alias: {}", alias));
+    }
+
+    lines.join("\n")
 }
 
 fn modulo_match(selected_idx: i32, list_item_idx: i32, list_len: usize) -> bool {
