@@ -1,18 +1,34 @@
 #![deny(warnings)]
 
 use clap::Parser;
+use ratatui::style::Color;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui_textarea::TextArea;
+use std::cell::RefCell;
 use std::fs;
 use std::io;
 use std::process::Command;
+use std::rc::Rc;
 
 use ratatui::crossterm::{event, execute};
 use ratatui::{Terminal, layout::Rect, prelude::CrosstermBackend};
 
+use crate::input::update_input;
+use crate::model::UnifiedOutput;
+use crate::tui::build_output_details;
+use crate::tui::build_profile_details;
+use crate::tui::normalize_index;
+
+mod input;
 mod model;
 mod niri;
 mod parser;
 mod tui;
 mod validation;
+
+pub const DO_EDITOR_FLOW: &str = "DO_EDITOR_FLOW";
 
 /// kanshig - A TUI application for generating and updating Kanshi configs
 #[derive(Parser, Debug)]
@@ -56,25 +72,27 @@ fn main() -> io::Result<()> {
     // Check if the file exists and load it
     let path = std::path::Path::new(&config_path);
     let mut config: Option<crate::model::KanshiConfig> = None;
+    let mut content = "".to_owned();
 
     if path.exists() {
         log::info!("Config file found at: {}", config_path);
 
         // Load the file as a string
         match fs::read_to_string(&config_path) {
-            Ok(content) => {
+            Ok(c_content) => {
                 log::info!("Config file content loaded successfully");
 
                 // Validate the config
-                match validation::validate_config(&content) {
+                match validation::validate_config(&c_content) {
                     Ok(_) => {
                         log::info!("Config validation passed");
 
                         // Parse into data model structs
-                        match parser::parse_config(&content) {
-                            Ok(parsed_config) => {
+                        match parser::parse_config(&c_content) {
+                            Ok((parsed_config, c_content)) => {
                                 log::info!("Config parsed into data model structs");
                                 config = Some(parsed_config);
+                                content = c_content;
                             }
                             Err(e) => {
                                 log::error!(
@@ -140,7 +158,13 @@ fn main() -> io::Result<()> {
     execute!(terminal.backend_mut(), event::EnableMouseCapture)?;
 
     // Run the TUI
-    run_tui(&mut terminal, config.as_ref(), niri_outputs.as_ref())?;
+    run_tui(
+        &mut terminal,
+        config.as_ref(),
+        niri_outputs.as_ref(),
+        &config_path,
+        Some(content),
+    )?;
 
     // Disable mouse support before exiting
     execute!(terminal.backend_mut(), event::DisableMouseCapture)?;
@@ -244,27 +268,17 @@ fn reload_kanshi_daemon() -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum KanshigTuiState {
+#[derive(Debug, Clone)]
+pub enum KanshigTuiState<'a> {
     OutputsFocused(i32, i32),
     ProfilesFocused(i32, i32),
     HelpPopup,
+    EditConfig {
+        textarea: Rc<RefCell<TextArea<'a>>>,
+        original_content: String,
+    },
     QuitNow,
 }
-
-pub const MOVE_SET: &[event::KeyCode] = &[
-    event::KeyCode::Up,
-    event::KeyCode::Down,
-    event::KeyCode::Left,
-    event::KeyCode::Right,
-    event::KeyCode::Char('w'),
-    event::KeyCode::Char('a'),
-    event::KeyCode::Char('s'),
-    event::KeyCode::Char('d'),
-    event::KeyCode::Char('j'),
-    event::KeyCode::Char('k'),
-    event::KeyCode::Tab,
-];
 
 pub const WRITE_CONFIG: event::KeyCode = event::KeyCode::Char('W');
 
@@ -272,102 +286,33 @@ fn run_tui(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     config: Option<&crate::model::KanshiConfig>,
     niri_outputs: Option<&crate::model::NiriOutputs>,
+    config_path: &str,
+    config_content: Option<String>,
 ) -> io::Result<()> {
     let mut selected = KanshigTuiState::OutputsFocused(0, 0);
     // Create a loop to handle events
     loop {
         // Draw the UI
+        let new_selected = selected.clone();
         terminal.draw(|frame| {
-            draw_ui(frame, config, niri_outputs, &selected);
+            draw_ui(frame, config, niri_outputs, &new_selected);
         })?;
 
         // Check for events
         if event::poll(std::time::Duration::from_millis(100))?
             && let event::Event::Key(key) = event::read()?
         {
-            selected = update_input(&selected, key);
-            if let KanshigTuiState::QuitNow = selected {
+            let new_selected = selected.clone();
+            let new_selected =
+                update_input(new_selected, key, config_content.as_ref(), config_path);
+            if let KanshigTuiState::QuitNow = new_selected {
                 break;
             }
+            selected = new_selected;
         }
     }
 
     Ok(())
-}
-
-fn update_input(in_selected: &KanshigTuiState, key: event::KeyEvent) -> KanshigTuiState {
-    let selected = *in_selected;
-
-    // Handle help popup toggle with '?'
-    if key.code == event::KeyCode::Char('?') {
-        return match selected {
-            KanshigTuiState::OutputsFocused(_, _) | KanshigTuiState::ProfilesFocused(_, _) => {
-                KanshigTuiState::HelpPopup
-            }
-            KanshigTuiState::HelpPopup => KanshigTuiState::OutputsFocused(0, 0),
-            _ => selected,
-        };
-    }
-
-    // When help popup is open, any key closes it
-    if let KanshigTuiState::HelpPopup = selected {
-        return KanshigTuiState::OutputsFocused(0, 0);
-    }
-
-    // Exit on 'q' or Escape
-    if key.code == event::KeyCode::Char('q') || key.code == event::KeyCode::Esc {
-        return KanshigTuiState::QuitNow;
-    }
-    if MOVE_SET.contains(&key.code) {
-        match selected {
-            KanshigTuiState::QuitNow => KanshigTuiState::QuitNow,
-            KanshigTuiState::OutputsFocused(oi, pi) => {
-                if let event::KeyCode::Tab = key.code {
-                    KanshigTuiState::ProfilesFocused(pi, oi)
-                } else if let event::KeyCode::Up
-                | event::KeyCode::Char('k')
-                | event::KeyCode::Char('w') = key.code
-                {
-                    // UP
-                    let new_val = oi - 1;
-                    KanshigTuiState::OutputsFocused(new_val, pi)
-                } else if let event::KeyCode::Down
-                | event::KeyCode::Char('j')
-                | event::KeyCode::Char('s') = key.code
-                {
-                    //Down
-                    let new_val = oi + 1;
-                    KanshigTuiState::OutputsFocused(new_val, pi)
-                } else {
-                    selected
-                }
-            }
-            KanshigTuiState::ProfilesFocused(oi, pi) => {
-                if let event::KeyCode::Tab = key.code {
-                    KanshigTuiState::OutputsFocused(pi, oi)
-                } else if let event::KeyCode::Up
-                | event::KeyCode::Char('k')
-                | event::KeyCode::Char('w') = key.code
-                {
-                    // UP
-                    let new_val = oi - 1;
-                    KanshigTuiState::ProfilesFocused(new_val, pi)
-                } else if let event::KeyCode::Down
-                | event::KeyCode::Char('j')
-                | event::KeyCode::Char('s') = key.code
-                {
-                    //Down
-                    let new_val = oi + 1;
-                    KanshigTuiState::ProfilesFocused(new_val, pi)
-                } else {
-                    selected
-                }
-            }
-            KanshigTuiState::HelpPopup => selected,
-        }
-    } else {
-        selected
-    }
 }
 
 fn draw_ui(
@@ -385,18 +330,28 @@ fn draw_ui(
     }
 
     // Split the area into sections
-    let chunks = ratatui::layout::Layout::vertical([
-        ratatui::layout::Constraint::Percentage(50),
-        ratatui::layout::Constraint::Percentage(50),
+    let chunks = ratatui::layout::Layout::horizontal([
+        ratatui::layout::Constraint::Percentage(40),
+        ratatui::layout::Constraint::Percentage(60),
     ])
     .split(area);
 
-    let outputs_chunk = chunks[0];
-    let profiles_chunk = chunks[1];
+    let picker_lists = chunks[0];
+    let details_area = chunks[1];
+    //let outputs_chunk = chunks[0];
+    //let profiles_chunk = chunks[1];
+    let picker_chunks = ratatui::layout::Layout::vertical([
+        ratatui::layout::Constraint::Percentage(50),
+        ratatui::layout::Constraint::Percentage(50),
+    ])
+    .split(picker_lists);
+    let outputs_chunk = picker_chunks[0];
+    let profiles_chunk = picker_chunks[1];
 
     // Draw unified outputs if both config and niri_outputs are available
     if let Some(c) = config {
         if let Some(outputs) = niri_outputs {
+            // only unified outputs in its <25% square
             tui::display_unified_outputs(frame, c, outputs, outputs_chunk, selected);
         } else {
             // Fallback to just config display
@@ -418,7 +373,72 @@ fn draw_ui(
 
     let has_profiles = config.is_some();
     if has_profiles {
-        tui::display_profiles(frame, config, niri_outputs, profiles_chunk, selected);
+        // list only
+        tui::display_profiles(frame, config, profiles_chunk, selected);
+    }
+
+    //let text = build_output_details(output)
+    let def_item = model::KanshiConfig::default();
+    let config = config.unwrap_or(&def_item);
+    let list_len = config.outputs.len() + niri_outputs.iter().len();
+    let details_text = match selected {
+        KanshigTuiState::OutputsFocused(oi, _) => {
+            let unified_outputs: Vec<UnifiedOutput> = config
+                .outputs
+                .iter()
+                .map(|output| UnifiedOutput::from_config(output.clone()))
+                .collect();
+            if !config.outputs.is_empty() || niri_outputs.is_some() {
+                let selected_idx = normalize_index(*oi, list_len);
+                if selected_idx < config.outputs.len() {
+                    build_output_details(&unified_outputs[selected_idx])
+                } else {
+                    "No output selected".to_string()
+                }
+            } else {
+                "No outputs available".to_string()
+            }
+        }
+        KanshigTuiState::ProfilesFocused(pi, _) => {
+            let profiles_len = config.profiles.len();
+            if profiles_len > 0 {
+                let selected_idx = normalize_index(*pi, profiles_len);
+                let profile = config
+                    .profiles
+                    .get(selected_idx)
+                    .expect("main.rs profile focused expected some profile, got none");
+                if selected_idx < profiles_len {
+                    build_profile_details(profile, niri_outputs)
+                } else {
+                    "No output selected".to_string()
+                }
+            } else {
+                "No outputs available".to_string()
+            }
+        }
+        KanshigTuiState::EditConfig { .. } => {
+            // ?
+            //textarea
+            DO_EDITOR_FLOW.to_owned()
+        }
+        _ => "Select an output to view details".to_string(),
+    };
+
+    if details_text == DO_EDITOR_FLOW {
+        match selected {
+            KanshigTuiState::EditConfig { textarea, .. } => {
+                frame.render_widget(&*textarea.borrow(), details_area);
+            }
+            d => panic!(
+                "expected an EditConfig to be current input state, but was instead {:?}",
+                d
+            ),
+        }
+    } else {
+        let details_widget = ratatui::widgets::Paragraph::new(details_text)
+            .block(Block::new().title("Output Details").borders(Borders::ALL))
+            .style(Style::default().fg(Color::White));
+        frame.render_widget(details_widget, details_area);
     }
 }
 

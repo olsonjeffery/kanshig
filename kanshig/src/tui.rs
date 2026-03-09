@@ -2,7 +2,7 @@
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem},
 };
@@ -18,8 +18,8 @@ pub fn display_config(f: &mut Frame, config: &KanshiConfig, chunk_rect: Rect) {
     let area = chunk_rect;
 
     // Create two columns for outputs and profiles
-    let chunks =
-        Layout::vertical([Constraint::Percentage(51), Constraint::Percentage(50)]).split(area);
+    //let chunks =
+    //    Layout::vertical([Constraint::Percentage(51), Constraint::Percentage(50)]).split(area);
 
     // Display outputs
     let outputs_list: Vec<ListItem> = config
@@ -38,7 +38,7 @@ pub fn display_config(f: &mut Frame, config: &KanshiConfig, chunk_rect: Rect) {
         .block(Block::new().title("Outputs").borders(Borders::ALL))
         .style(Style::default().fg(Color::White));
 
-    f.render_widget(outputs_list_widget, chunks[0]);
+    f.render_widget(outputs_list_widget, area);
 }
 
 /// Display the niri outputs
@@ -64,7 +64,6 @@ pub fn display_niri_outputs(f: &mut Frame, outputs: &NiriOutputs, display_chunk:
 pub fn display_profiles(
     f: &mut Frame,
     config: Option<&model::KanshiConfig>,
-    niri_outputs: Option<&NiriOutputs>,
     profiles_chunk: ratatui::prelude::Rect,
     selected: &KanshigTuiState,
 ) {
@@ -74,12 +73,7 @@ pub fn display_profiles(
     };
 
     // Split the profiles area horizontally into list (left) and details (right)
-    let profile_chunks =
-        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
-            .split(profiles_chunk);
-
-    let profiles_list_area = profile_chunks[0];
-    let profiles_details_area = profile_chunks[1];
+    let profiles_list_area = profiles_chunk;
 
     // Build the profiles list (left side)
     let mut profiles_list = Vec::new();
@@ -111,33 +105,10 @@ pub fn display_profiles(
         .block(Block::new().title("Profiles").borders(Borders::ALL))
         .style(box_style);
     f.render_widget(profiles_list_widget, profiles_list_area);
-
-    // Build the profile details (right side)
-    let details_text = match selected {
-        KanshigTuiState::ProfilesFocused(pi, _) => {
-            if list_len > 0 {
-                let selected_idx = normalize_index(*pi, list_len);
-                if selected_idx < config.profiles.len() {
-                    let profile = &config.profiles[selected_idx];
-                    build_profile_details(profile, niri_outputs)
-                } else {
-                    "No profile selected".to_string()
-                }
-            } else {
-                "No profiles available".to_string()
-            }
-        }
-        _ => "Select a profile to view details".to_string(),
-    };
-
-    let details_widget = ratatui::widgets::Paragraph::new(details_text)
-        .block(Block::new().title("Profile Details").borders(Borders::ALL))
-        .style(Style::default().fg(Color::White));
-    f.render_widget(details_widget, profiles_details_area);
 }
 
 /// Normalize a potentially negative or out-of-bounds index to a valid index
-fn normalize_index(idx: i32, len: usize) -> usize {
+pub fn normalize_index(idx: i32, len: usize) -> usize {
     if len == 0 {
         return 0;
     }
@@ -147,7 +118,10 @@ fn normalize_index(idx: i32, len: usize) -> usize {
 }
 
 /// Build the details text for a profile
-fn build_profile_details(profile: &model::Profile, niri_outputs: Option<&NiriOutputs>) -> String {
+pub fn build_profile_details(
+    profile: &model::Profile,
+    niri_outputs: Option<&NiriOutputs>,
+) -> String {
     let mut lines = Vec::new();
     lines.push(format!("Profile: {}", profile.name));
     lines.push("".to_string());
@@ -194,6 +168,26 @@ fn is_output_detected(alias: &str, niri_outputs: &NiriOutputs) -> bool {
     false
 }
 
+#[allow(dead_code)]
+pub fn display_outputs_and_profiles(
+    _f: &mut Frame,
+    _config: &KanshiConfig,
+    _niri_outputs: &NiriOutputs,
+    _display_chunk: Rect,
+    _selected: &KanshigTuiState,
+) {
+}
+
+#[allow(dead_code)]
+pub fn display_activity_pane(
+    _f: &mut Frame,
+    _config: &KanshiConfig,
+    _niri_outputs: &NiriOutputs,
+    _display_chunk: Rect,
+    _selected: &KanshigTuiState,
+) {
+}
+
 /// Display the unified outputs (combined config and niri outputs)
 pub fn display_unified_outputs(
     f: &mut Frame,
@@ -202,14 +196,12 @@ pub fn display_unified_outputs(
     display_chunk: Rect,
     selected: &KanshigTuiState,
 ) {
-    let area = display_chunk;
-
     // Split the area horizontally into list (left) and details (right)
-    let output_chunks =
-        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(area);
+    //let output_chunks =
+    //    Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(area);
 
-    let outputs_list_area = output_chunks[0];
-    let outputs_details_area = output_chunks[1];
+    let outputs_list_area = display_chunk;
+    //let outputs_details_area = output_chunks[1];
 
     // Create a list of unified outputs
     let mut outputs_list: Vec<ListItem> = Vec::new();
@@ -335,6 +327,7 @@ pub fn display_unified_outputs(
     f.render_widget(outputs_list_widget, outputs_list_area);
 
     // Build the output details (right side)
+    /*
     let details_text = match selected {
         KanshigTuiState::OutputsFocused(oi, _) => {
             if list_len > 0 {
@@ -355,10 +348,11 @@ pub fn display_unified_outputs(
         .block(Block::new().title("Output Details").borders(Borders::ALL))
         .style(Style::default().fg(Color::White));
     f.render_widget(details_widget, outputs_details_area);
+    */
 }
 
 /// Build the details text for a unified output
-fn build_output_details(output: &UnifiedOutput) -> String {
+pub fn build_output_details(output: &UnifiedOutput) -> String {
     let mut lines = Vec::new();
 
     // Status line

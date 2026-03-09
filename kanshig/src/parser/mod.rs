@@ -5,12 +5,12 @@ use crate::model::{KanshiConfig, OutputDefinition, Profile};
 use crate::validation::{ValidationError, validate_config};
 
 /// Parse a validated kanshi config string into data model structs
-pub fn parse_config(content: &str) -> Result<KanshiConfig, ParseError> {
+pub fn parse_config(content: &str) -> Result<(KanshiConfig, String), ParseError> {
     // First validate the config
     validate_config(content)?;
 
     // Then parse it into structs
-    Ok(parse_config_unsafe(content))
+    Ok((parse_config_unsafe(content), content.to_owned()))
 }
 
 /// Parse a kanshi config string into data model structs (unsafe, no validation)
@@ -168,7 +168,7 @@ profile home_dock {
 
     #[test]
     fn test_parse_config() {
-        let config = parse_config(SAMPLE_CONFIG).unwrap();
+        let config = parse_config(SAMPLE_CONFIG).unwrap().0;
 
         assert_eq!(config.outputs.len(), 2);
         assert_eq!(config.profiles.len(), 2);
@@ -208,7 +208,7 @@ profile home_dock {
 
     #[test]
     fn test_empty_config() {
-        let config = parse_config("").unwrap();
+        let config = parse_config("").unwrap().0;
         assert_eq!(config.outputs.len(), 0);
         assert_eq!(config.profiles.len(), 0);
     }
@@ -224,7 +224,8 @@ output "Test" {
 }
 "#,
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         assert_eq!(config.outputs.len(), 1);
         assert_eq!(config.outputs[0].name, "Test");
@@ -239,7 +240,8 @@ profile test {
 }
 "#,
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         assert_eq!(config.profiles.len(), 1);
         assert_eq!(config.profiles[0].name, "test");
