@@ -454,6 +454,14 @@ fn draw_help_popup(frame: &mut ratatui::Frame, area: Rect) {
     // Define help entries - easily extensible for future additions
     let help_entries = vec![
         HelpEntry {
+            keys: vec!["q", "Esc"],
+            description: "Quit",
+        },
+        HelpEntry {
+            keys: vec!["?"],
+            description: "Toggle help popup",
+        },
+        HelpEntry {
             keys: vec!["j", "s", "↓"],
             description: "Move down",
         },
@@ -466,12 +474,16 @@ fn draw_help_popup(frame: &mut ratatui::Frame, area: Rect) {
             description: "Switch focus between panels",
         },
         HelpEntry {
-            keys: vec!["q", "Esc"],
+            keys: vec!["e", "Open Kanshi Config Editor"],
             description: "Quit",
         },
         HelpEntry {
-            keys: vec!["?"],
-            description: "Toggle help popup",
+            keys: vec!["CTRL+d, Esc", "Editor: Discard"],
+            description: "Quit",
+        },
+        HelpEntry {
+            keys: vec!["CTRL+s", "Editor: Save"],
+            description: "Quit",
         },
     ];
 
