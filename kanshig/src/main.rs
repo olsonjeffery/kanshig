@@ -9,7 +9,6 @@ use ratatui_textarea::TextArea;
 use std::cell::RefCell;
 use std::fs;
 use std::io;
-use std::process::Command;
 use std::rc::Rc;
 
 use ratatui::crossterm::{event, execute};
@@ -44,10 +43,6 @@ struct Args {
     /// Output unified outputs as JSON and exit (skip TUI)
     #[arg(long)]
     json: bool,
-
-    /// Reload kanshi config by restarting the kanshi systemd daemon
-    #[arg(long)]
-    reload: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -136,12 +131,6 @@ fn main() -> io::Result<()> {
     };
 
     log::info!("kanshig CLI initialized successfully");
-
-    // Handle reload mode (restart kanshi systemd daemon)
-    if args.reload {
-        reload_kanshi_daemon()?;
-        return Ok(());
-    }
 
     // Handle JSON output mode (skip TUI)
     if args.json {
@@ -238,36 +227,6 @@ fn build_unified_outputs(
     unified_outputs
 }
 
-/// Reload kanshi by restarting the systemd daemon
-/// Idempotent and safe to reinvoke
-fn reload_kanshi_daemon() -> io::Result<()> {
-    log::info!("Restarting kanshi systemd daemon...");
-
-    let output = Command::new("systemctl")
-        .args(["restart", "kanshi"])
-        .output()?;
-
-    if output.status.success() {
-        println!("Kanshi daemon restarted successfully");
-        log::info!("Kanshi daemon restarted successfully");
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::error!("Failed to restart kanshi daemon");
-        log::error!("stdout: {}", stdout);
-        log::error!("stderr: {}", stderr);
-        let error_msg = if stderr.trim().is_empty() {
-            stdout.trim()
-        } else {
-            stderr.trim()
-        };
-        println!("Failed to restart kanshi daemon: {}", error_msg);
-        return Err(io::Error::other("Failed to restart kanshi daemon"));
-    }
-
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 pub enum KanshigTuiState<'a> {
     OutputsFocused(i32, i32),
@@ -276,6 +235,10 @@ pub enum KanshigTuiState<'a> {
     EditConfig {
         textarea: Rc<RefCell<TextArea<'a>>>,
         original_content: String,
+    },
+    AddOutputPopup {
+        add_output_state: crate::model::AddOutputWindowState<'a>,
+        previous_outputs_index: i32,
     },
     QuitNow,
 }
@@ -290,6 +253,10 @@ fn run_tui(
     config_content: Option<String>,
 ) -> io::Result<()> {
     let mut selected = KanshigTuiState::OutputsFocused(0, 0);
+
+    // Build unified outputs for input handling
+    let unified_outputs = build_unified_outputs(config, niri_outputs);
+
     // Create a loop to handle events
     loop {
         // Draw the UI
@@ -302,9 +269,29 @@ fn run_tui(
         if event::poll(std::time::Duration::from_millis(100))?
             && let event::Event::Key(key) = event::read()?
         {
+            // Get the selected unified output if outputs are focused
+            let selected_unified_output = match &selected {
+                KanshigTuiState::OutputsFocused(oi, _) => {
+                    let list_len = unified_outputs.len();
+                    if list_len > 0 {
+                        let selected_idx = tui::normalize_index(*oi, list_len);
+                        unified_outputs.get(selected_idx)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+
             let new_selected = selected.clone();
-            let new_selected =
-                update_input(new_selected, key, config_content.as_ref(), config_path);
+            let new_selected = update_input(
+                new_selected,
+                key,
+                config_content.as_ref(),
+                config_path,
+                niri_outputs,
+                selected_unified_output,
+            );
             if let KanshigTuiState::QuitNow = new_selected {
                 break;
             }
@@ -326,6 +313,15 @@ fn draw_ui(
     // Draw help popup if active
     if let KanshigTuiState::HelpPopup = selected {
         draw_help_popup(frame, area);
+        return;
+    }
+
+    // Draw add output popup if active
+    if let KanshigTuiState::AddOutputPopup {
+        add_output_state, ..
+    } = selected
+    {
+        draw_add_output_popup(frame, area, add_output_state);
         return;
     }
 
@@ -515,4 +511,86 @@ fn draw_help_popup(frame: &mut ratatui::Frame, area: Rect) {
 
     // Render the popup
     frame.render_widget(help_paragraph, popup_area);
+}
+
+/// Draw the add output popup centered on screen
+fn draw_add_output_popup(
+    frame: &mut ratatui::Frame,
+    area: Rect,
+    add_output_state: &crate::model::AddOutputWindowState,
+) {
+    // Calculate popup dimensions
+    let popup_width = 60;
+    let popup_height = 18; // Title + 4 fields + 2 buttons + padding
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Create the popup block
+    let popup_block = ratatui::widgets::Block::new()
+        .title(" Add Output to Config ")
+        .borders(ratatui::widgets::Borders::ALL)
+        .border_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan));
+
+    // Layout for popup content
+    let chunks = ratatui::layout::Layout::vertical([
+        ratatui::layout::Constraint::Length(3), // Output name label
+        ratatui::layout::Constraint::Length(2), // Mode
+        ratatui::layout::Constraint::Length(2), // Position
+        ratatui::layout::Constraint::Length(2), // Scale
+        ratatui::layout::Constraint::Length(2), // Alias
+        ratatui::layout::Constraint::Length(3), // Buttons
+    ])
+    .split(popup_area);
+
+    // Output name label
+    let name_label = ratatui::widgets::Paragraph::new(
+        ratatui::text::Line::raw(format!("Output: {}", add_output_state.output_name))
+            .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow)),
+    );
+    frame.render_widget(name_label, chunks[0]);
+
+    // Helper function to render a field with label and textarea
+    let _is_focused = |focus: crate::model::AddOutputFocus| add_output_state.focus == focus;
+
+    // Mode field
+    let mode_label = ratatui::widgets::Paragraph::new("Mode:");
+    frame.render_widget(mode_label, chunks[1]);
+    frame.render_widget(&*add_output_state.mode.borrow(), chunks[1]);
+
+    // Position field
+    let pos_label = ratatui::widgets::Paragraph::new("Position:");
+    frame.render_widget(pos_label, chunks[2]);
+    frame.render_widget(&*add_output_state.position.borrow(), chunks[2]);
+
+    // Scale field
+    let scale_label = ratatui::widgets::Paragraph::new("Scale:");
+    frame.render_widget(scale_label, chunks[3]);
+    frame.render_widget(&*add_output_state.scale.borrow(), chunks[3]);
+
+    // Alias field
+    let alias_label = ratatui::widgets::Paragraph::new("Alias:");
+    frame.render_widget(alias_label, chunks[4]);
+    frame.render_widget(&*add_output_state.alias.borrow(), chunks[4]);
+
+    // Buttons
+    let buttons_text = if _is_focused(crate::model::AddOutputFocus::AddButton) {
+        "[>] Add    Cancel".to_string()
+    } else if _is_focused(crate::model::AddOutputFocus::CancelButton) {
+        "Add    [>] Cancel".to_string()
+    } else {
+        "[ ] Add    [ ] Cancel".to_string()
+    };
+
+    let buttons = ratatui::widgets::Paragraph::new(buttons_text)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::new()
+                .title(" Press Enter to confirm, Esc to cancel ")
+                .borders(Borders::NONE),
+        );
+    frame.render_widget(buttons, chunks[5]);
+
+    // Render the popup block
+    frame.render_widget(popup_block, popup_area);
 }
