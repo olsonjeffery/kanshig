@@ -15,7 +15,6 @@ use ratatui::crossterm::{event, execute};
 use ratatui::{Terminal, layout::Rect, prelude::CrosstermBackend};
 
 use crate::input::update_input;
-use crate::model::UnifiedOutput;
 use crate::tui::build_output_details;
 use crate::tui::build_profile_details;
 use crate::tui::normalize_index;
@@ -376,17 +375,12 @@ fn draw_ui(
     //let text = build_output_details(output)
     let def_item = model::KanshiConfig::default();
     let config = config.unwrap_or(&def_item);
-    let list_len = config.outputs.len() + niri_outputs.iter().len();
     let details_text = match selected {
         KanshigTuiState::OutputsFocused(oi, _) => {
-            let unified_outputs: Vec<UnifiedOutput> = config
-                .outputs
-                .iter()
-                .map(|output| UnifiedOutput::from_config(output.clone()))
-                .collect();
-            if !config.outputs.is_empty() || niri_outputs.is_some() {
-                let selected_idx = normalize_index(*oi, list_len);
-                if selected_idx < config.outputs.len() {
+            let unified_outputs = build_unified_outputs(Some(config), niri_outputs);
+            if !unified_outputs.is_empty() {
+                let selected_idx = normalize_index(*oi, unified_outputs.len());
+                if selected_idx < unified_outputs.len() {
                     build_output_details(&unified_outputs[selected_idx])
                 } else {
                     "No output selected".to_string()
