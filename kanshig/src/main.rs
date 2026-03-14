@@ -186,6 +186,7 @@ fn build_unified_outputs(
             for unified in &mut unified_outputs {
                 if unified.name.contains(ni_model) {
                     unified.mark_detected();
+                    unified.niri_output = Some(niri_output.clone());
                     match_found = true;
                     break;
                 }
